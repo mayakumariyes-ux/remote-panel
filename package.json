@@ -1,0 +1,14 @@
+{
+  "name": "remote",
+  "version": "1.0.0",
+  "description": "Remote Control System",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "loclx": "^24.4.1",
+    "socket.io": "^4.6.0"
+  }
+}

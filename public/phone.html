@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phone Remote</title>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0a1a;
+            color: #fff;
+            font-family: Arial;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        .status-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #ff6b35;
+            color: #fff;
+            padding: 12px;
+            text-align: center;
+            z-index: 9999;
+        }
+
+        .status-bar button {
+            background: #fff;
+            color: #ff6b35;
+            border: none;
+            padding: 4px 16px;
+            border-radius: 20px;
+            margin-left: 10px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .container {
+            text-align: center;
+            padding: 80px 20px 20px;
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .container h1 {
+            color: #4caf50;
+            font-size: 24px;
+        }
+
+        .sub {
+            color: #888;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+
+        .input-group input {
+            padding: 12px 15px;
+            border-radius: 10px;
+            border: none;
+            background: #1a1a2e;
+            color: #fff;
+            font-size: 16px;
+            border: 1px solid #333;
+            width: 200px;
+        }
+
+        .input-group button {
+            padding: 12px 24px;
+            background: #4caf50;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .input-group button:disabled {
+            background: #666;
+        }
+
+        .id-display {
+            font-size: 14px;
+            color: #888;
+            margin: 5px 0;
+        }
+
+        .log {
+            margin-top: 15px;
+            font-size: 11px;
+            color: #444;
+            max-height: 80px;
+            overflow-y: auto;
+            text-align: left;
+            background: #0a0a1a;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #222;
+            width: 100%;
+        }
+
+        .log .entry {
+            padding: 2px 0;
+            border-bottom: 1px solid #111;
+        }
+
+        .log .entry .time {
+            color: #666;
+            margin-right: 8px;
+        }
+
+        .log .entry .cmd {
+            color: #4caf50;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="status-bar">
+        🔵 Remote Control Active
+        <span style="font-size:11px;opacity:0.8;display:block;margin-top:3px;">Connected to Admin</span>
+        <button onclick="disconnect()">⛔ Disconnect</button>
+    </div>
+    <div class="container">
+        <h1>📱 Phone Remote</h1>
+        <p class="sub">Your screen is being shared with Admin</p>
+        <div class="input-group">
+            <input type="text" id="deviceId" placeholder="Enter ID" value="phone123">
+            <button id="connectBtn">🔗 Connect</button>
+        </div>
+        <div class="id-display" id="idDisplay">⚪ Not connected</div>
+        <div class="log" id="log">
+            <div class="entry"><span class="time">[System]</span><span class="cmd">Waiting for commands...</span></div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let deviceId = '';
+        let isConnected = false;
+
+        document.getElementById('connectBtn').onclick = function () {
+            deviceId = document.getElementById('deviceId').value.trim() || 'phone123';
+            socket.emit('phone-register', deviceId);
+            document.getElementById('idDisplay').textContent = '✅ Connected as: ' + deviceId;
+            document.getElementById('idDisplay').style.color = '#4caf50';
+            this.textContent = '✅ Connected';
+            this.disabled = true;
+            isConnected = true;
+            addLog('System', 'Connected to server');
+            startScreenCapture();
+        };
+
+        function startScreenCapture() {
+            setInterval(() => {
+                if (!isConnected) return;
+                const canvas = document.createElement('canvas');
+                canvas.width = 300;
+                canvas.height = 500;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#0a0a1a';
+                ctx.fillRect(0, 0, 300, 500);
+                ctx.fillStyle = '#4caf50';
+                ctx.font = 'bold 16px Arial';
+                ctx.fillText('📱 ' + deviceId, 20, 50);
+                ctx.fillStyle = '#888';
+                ctx.font = '14px Arial';
+                ctx.fillText('Screen sharing', 20, 80);
+                ctx.fillStyle = '#ff6b35';
+                ctx.fillText('🔴 Active', 20, 110);
+                socket.emit('phone-screen', deviceId, canvas.toDataURL('image/jpeg', 0.7));
+            }, 2000);
+        }
+
+        socket.on('phone-command', (data) => {
+            addLog('Admin', data.type + (data.action ? ': ' + data.action : ''));
+            if (data.type === 'system') {
+                const actions = { 'home': '🏠 Home', 'back': '⬅️ Back', 'lock': '🔒 Locked' };
+                alert(actions[data.action] || data.action);
+                if (data.action === 'lock') document.body.style.opacity = '0.3';
+            }
+        });
+
+        function disconnect() {
+            if (confirm('Disconnect from remote control?')) {
+                isConnected = false;
+                socket.disconnect();
+                document.querySelector('.status-bar').style.background = '#666';
+                document.querySelector('.status-bar').innerHTML = '⛔ Disconnected';
+                alert('Disconnected');
+                location.reload();
+            }
+        }
+
+        function addLog(type, message) {
+            const log = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'entry';
+            entry.innerHTML = `<span class="time">[${time}]</span><span class="cmd">${type}: ${message}</span>`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+            if (log.children.length > 20) log.removeChild(log.children[0]);
+        }
+    </script>
+</body>
+
+</html>
